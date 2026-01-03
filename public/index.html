@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Images Gallery</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        .product-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+        .product-card:hover {
+            transform: translateY(-5px);
+        }
+        .product-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .product-name {
+            padding: 15px;
+            font-weight: 600;
+            color: #333;
+        }
+        .modal-content {
+            border-radius: 10px;
+        }
+        .carousel-item img {
+            max-height: 500px;
+            object-fit: contain;
+            margin: 0 auto;
+        }
+        .zoom-container {
+            text-align: center;
+        }
+        .carousel-control-prev-icon, .carousel-control-next-icon {
+            filter: invert(1);
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <h1 class="text-center my-4">Product Images Gallery</h1>
+        <div id="loading" class="loading">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Loading products...</p>
+        </div>
+        <div id="product-grid" class="product-grid" style="display: none;"></div>
+    </div>
+
+    <!-- Modal for product details -->
+    <div class="modal fade" id="productModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="productModalLabel"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="carouselContainer">
+                        <!-- Carousel will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let products = [];
+        const itemsPerPage = 100;
+        let currentPage = 1;
+
+        async function loadProducts() {
+            try {
+                const response = await fetch('/api/products');
+                products = await response.json();
+                displayProducts();
+            } catch (error) {
+                console.error('Error loading products:', error);
+                document.getElementById('loading').innerHTML = '<p>Error loading products. Please try again.</p>';
+            }
+        }
+
+        function getFrontImage(product) {
+            if (product.front_image && product.front_image.length > 0) {
+                return product.front_image[0];
+            }
+            if (product.nutrition_image && product.nutrition_image.length > 0) {
+                return product.nutrition_image[0];
+            }
+            if (product.ingredients_image && product.ingredients_image.length > 0) {
+                return product.ingredients_image[0];
+            }
+            if (product.packaging_image && product.packaging_image.length > 0) {
+                return product.packaging_image[0];
+            }
+            return 'https://via.placeholder.com/250x200?text=No+Image';
+        }
+
+        function displayProducts() {
+            document.getElementById('loading').style.display = 'none';
+            const grid = document.getElementById('product-grid');
+            grid.style.display = 'grid';
+
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageProducts = products.slice(start, end);
+
+            grid.innerHTML = '';
+
+            pageProducts.forEach(product => {
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.onclick = () => showProductModal(product);
+
+                const img = document.createElement('img');
+                img.className = 'product-image';
+                img.src = getFrontImage(product);
+                img.alt = product.uid;
+
+                const name = document.createElement('div');
+                name.className = 'product-name';
+                name.textContent = `${product.product_name} (${product.uid})`;
+
+                card.appendChild(img);
+                card.appendChild(name);
+                grid.appendChild(card);
+            });
+
+            // Add pagination if needed
+            if (products.length > itemsPerPage) {
+                addPagination();
+            }
+        }
+
+        function addPagination() {
+            const totalPages = Math.ceil(products.length / itemsPerPage);
+            let pagination = document.getElementById('pagination');
+            if (!pagination) {
+                pagination = document.createElement('nav');
+                pagination.id = 'pagination';
+                pagination.innerHTML = '<ul class="pagination justify-content-center mt-4"></ul>';
+                document.querySelector('.container-fluid').appendChild(pagination);
+            }
+            const ul = pagination.querySelector('ul');
+            ul.innerHTML = '';
+
+            const maxVisiblePages = 7; // Show up to 7 page numbers
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            // Previous button
+            if (currentPage > 1) {
+                const li = document.createElement('li');
+                li.className = 'page-item';
+                const a = document.createElement('a');
+                a.className = 'page-link';
+                a.href = '#';
+                a.textContent = 'Previous';
+                a.onclick = (e) => {
+                    e.preventDefault();
+                    currentPage--;
+                    displayProducts();
+                };
+                li.appendChild(a);
+                ul.appendChild(li);
+            }
+
+            // First page if not in range
+            if (startPage > 1) {
+                const li = document.createElement('li');
+                li.className = 'page-item';
+                const a = document.createElement('a');
+                a.className = 'page-link';
+                a.href = '#';
+                a.textContent = '1';
+                a.onclick = (e) => {
+                    e.preventDefault();
+                    currentPage = 1;
+                    displayProducts();
+                };
+                li.appendChild(a);
+                ul.appendChild(li);
+
+                if (startPage > 2) {
+                    const li = document.createElement('li');
+                    li.className = 'page-item disabled';
+                    const span = document.createElement('span');
+                    span.className = 'page-link';
+                    span.textContent = '...';
+                    li.appendChild(span);
+                    ul.appendChild(li);
+                }
+            }
+
+            // Page numbers
+            for (let i = startPage; i <= endPage; i++) {
+                const li = document.createElement('li');
+                li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                const a = document.createElement('a');
+                a.className = 'page-link';
+                a.href = '#';
+                a.textContent = i;
+                a.onclick = (e) => {
+                    e.preventDefault();
+                    currentPage = i;
+                    displayProducts();
+                };
+                li.appendChild(a);
+                ul.appendChild(li);
+            }
+
+            // Last page if not in range
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const li = document.createElement('li');
+                    li.className = 'page-item disabled';
+                    const span = document.createElement('span');
+                    span.className = 'page-link';
+                    span.textContent = '...';
+                    li.appendChild(span);
+                    ul.appendChild(li);
+                }
+
+                const li = document.createElement('li');
+                li.className = 'page-item';
+                const a = document.createElement('a');
+                a.className = 'page-link';
+                a.href = '#';
+                a.textContent = totalPages;
+                a.onclick = (e) => {
+                    e.preventDefault();
+                    currentPage = totalPages;
+                    displayProducts();
+                };
+                li.appendChild(a);
+                ul.appendChild(li);
+            }
+
+            // Next button
+            if (currentPage < totalPages) {
+                const li = document.createElement('li');
+                li.className = 'page-item';
+                const a = document.createElement('a');
+                a.className = 'page-link';
+                a.href = '#';
+                a.textContent = 'Next';
+                a.onclick = (e) => {
+                    e.preventDefault();
+                    currentPage++;
+                    displayProducts();
+                };
+                li.appendChild(a);
+                ul.appendChild(li);
+            }
+        }
+
+        function showProductModal(product) {
+            const modal = new bootstrap.Modal(document.getElementById('productModal'));
+            document.getElementById('productModalLabel').textContent = `Product: ${product.product_name} (${product.uid})`;
+
+            const allImages = [
+                ...product.front_image.map(url => ({ url, type: 'Front' })),
+                ...product.nutrition_image.map(url => ({ url, type: 'Nutrition' })),
+                ...product.ingredients_image.map(url => ({ url, type: 'Ingredients' })),
+                ...product.packaging_image.map(url => ({ url, type: 'Packaging' }))
+            ];
+
+            const carouselContainer = document.getElementById('carouselContainer');
+            carouselContainer.innerHTML = '';
+
+            if (allImages.length === 0) {
+                carouselContainer.innerHTML = '<p>No images available for this product.</p>';
+            } else {
+                const carousel = document.createElement('div');
+                carousel.id = 'productCarousel';
+                carousel.className = 'carousel slide';
+                carousel.setAttribute('data-bs-ride', 'carousel');
+
+                const indicators = document.createElement('div');
+                indicators.className = 'carousel-indicators';
+
+                const inner = document.createElement('div');
+                inner.className = 'carousel-inner';
+
+                allImages.forEach((imageObj, index) => {
+                    const indicator = document.createElement('button');
+                    indicator.type = 'button';
+                    indicator.setAttribute('data-bs-target', '#productCarousel');
+                    indicator.setAttribute('data-bs-slide-to', index);
+                    if (index === 0) indicator.className = 'active';
+                    indicators.appendChild(indicator);
+
+                    const item = document.createElement('div');
+                    item.className = `carousel-item ${index === 0 ? 'active' : ''}`;
+
+                    const zoomContainer = document.createElement('div');
+                    zoomContainer.className = 'zoom-container';
+
+                    const img = document.createElement('img');
+                    img.src = imageObj.url;
+                    img.className = 'd-block w-100';
+                    img.alt = `${imageObj.type} Image ${index + 1}`;
+                    img.title = imageObj.type;
+
+                    zoomContainer.appendChild(img);
+                    item.appendChild(zoomContainer);
+                    inner.appendChild(item);
+                });
+
+                const prevBtn = document.createElement('button');
+                prevBtn.className = 'carousel-control-prev';
+                prevBtn.type = 'button';
+                prevBtn.setAttribute('data-bs-target', '#productCarousel');
+                prevBtn.setAttribute('data-bs-slide', 'prev');
+                prevBtn.innerHTML = '<span class="carousel-control-prev-icon"></span>';
+
+                const nextBtn = document.createElement('button');
+                nextBtn.className = 'carousel-control-next';
+                nextBtn.type = 'button';
+                nextBtn.setAttribute('data-bs-target', '#productCarousel');
+                nextBtn.setAttribute('data-bs-slide', 'next');
+                nextBtn.innerHTML = '<span class="carousel-control-next-icon"></span>';
+
+                carousel.appendChild(indicators);
+                carousel.appendChild(inner);
+                carousel.appendChild(prevBtn);
+                carousel.appendChild(nextBtn);
+                carouselContainer.appendChild(carousel);
+            }
+
+            modal.show();
+        }
+
+        loadProducts();
+    </script>
+</body>
+</html>
